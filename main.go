@@ -113,7 +113,7 @@ func main() {
 	producerTopic = os.Getenv("KAFKA_PRODUCER_TOPIC")
 
 	for {
-		time.Sleep(5 * time.Second)
+		time.Sleep(10 * time.Second)
 		err := trackQuotes(equityWatchlist)
 		if err != nil {
 			fmt.Println(err)
