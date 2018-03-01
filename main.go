@@ -37,16 +37,18 @@ func trackQuotes(equityWatchlist string) error {
 	}
 
 	if resp.StatusCode() != 200 {
-		return fmt.Errorf("Incorrect status code: %v", resp.Status())
+		return fmt.Errorf("Incorrect status code: %v, %v", resp.Status(), string(resp.Body()))
 	}
 
 	value, err := jason.NewObjectFromBytes(resp.Body())
 	if err != nil {
+		fmt.Println("Line 45: ", string(resp.Body()))
 		return err
 	}
 
 	results, err := value.GetObjectArray("results")
 	if err != nil {
+		fmt.Println("Line 51: ", string(resp.Body()))
 		return err
 	}
 
