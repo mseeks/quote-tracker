@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/Shopify/sarama"
-	"github.com/antonholmquist/jason"
 	"github.com/shopspring/decimal"
 	resty "gopkg.in/resty.v1"
 )
@@ -22,6 +21,14 @@ var (
 type message struct {
 	Quote string `json:"quote"`
 	At    string `json:"at"`
+}
+
+type quoteQuery struct {
+	Results []struct {
+		LastExtendedHoursTradePrice string `json:"last_extended_hours_trade_price"`
+		LastTradePrice              string `json:"last_trade_price"`
+		Symbol                      string `json:"symbol"`
+	} `json:"results"`
 }
 
 // Macro function to run the tracking process
@@ -40,15 +47,10 @@ func trackQuotes(equityWatchlist string) error {
 		return fmt.Errorf("Incorrect status code: %v, %v", resp.Status(), string(resp.Body()))
 	}
 
-	value, err := jason.NewObjectFromBytes(resp.Body())
-	if err != nil {
-		fmt.Println("Line 45: ", string(resp.Body()))
-		return err
-	}
+	query := quoteQuery{}
 
-	results, err := value.GetObjectArray("results")
+	err = json.Unmarshal(resp.Body(), &query)
 	if err != nil {
-		fmt.Println("Line 51: ", string(resp.Body()))
 		return err
 	}
 
@@ -58,24 +60,10 @@ func trackQuotes(equityWatchlist string) error {
 	}
 	defer kafkaProducer.Close()
 
-	for _, result := range results {
-		symbol, err := result.GetString("symbol")
-		if err != nil {
-			return err
-		}
-
-		lastTradePrice, err := result.GetString("last_trade_price")
-		if err != nil {
-			return err
-		}
-
-		lastExtendedHoursTradePrice, err := result.GetString("last_extended_hours_trade_price")
-		if err != nil {
-			if err.Error() != "not a string" {
-				return err
-			}
-		}
-
+	for _, result := range query.Results {
+		symbol := result.Symbol
+		lastTradePrice := result.LastTradePrice
+		lastExtendedHoursTradePrice := result.LastExtendedHoursTradePrice
 		quote := lastTradePrice
 
 		if len(lastExtendedHoursTradePrice) > 0 {
