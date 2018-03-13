@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 var (
 	apiEndpoint   string
 	broker        string
+	producer      sarama.AsyncProducer
 	producerTopic string
 )
 
@@ -85,10 +87,10 @@ func trackQuotes(equityWatchlist string) error {
 			return err
 		}
 
-		message := &sarama.ProducerMessage{Topic: producerTopic, Value: sarama.StringEncoder(jsonMessage), Key: sarama.StringEncoder(symbol)}
-		_, _, err = kafkaProducer.SendMessage(message)
-		if err != nil {
-			return err
+		producer.Input() <- &sarama.ProducerMessage{
+			Topic: producerTopic,
+			Key:   sarama.StringEncoder(symbol),
+			Value: sarama.StringEncoder(jsonMessage),
 		}
 	}
 
@@ -102,11 +104,37 @@ func main() {
 	equityWatchlist := os.Getenv("EQUITY_WATCHLIST")
 	producerTopic = os.Getenv("KAFKA_PRODUCER_TOPIC")
 
+	producerConfig := sarama.NewConfig()
+
+	producerConfig.Producer.RequiredAcks = sarama.WaitForLocal       // Only wait for the leader to ack
+	producerConfig.Producer.Compression = sarama.CompressionSnappy   // Compress messages
+	producerConfig.Producer.Flush.Frequency = 500 * time.Millisecond // Flush batches every 500ms
+
+	// init consumer
+	brokers := []string{broker}
+
 	for {
-		time.Sleep(10 * time.Second)
-		err := trackQuotes(equityWatchlist)
+		var err error
+
+		producer, err = sarama.NewAsyncProducer(brokers, producerConfig)
 		if err != nil {
 			fmt.Println(err)
+			continue
+		}
+		defer producer.Close()
+
+		go func() {
+			for err := range producer.Errors() {
+				log.Println("Error:", err)
+			}
+		}()
+
+		for {
+			time.Sleep(10 * time.Second)
+			err := trackQuotes(equityWatchlist)
+			if err != nil {
+				fmt.Println(err)
+			}
 		}
 	}
 }
