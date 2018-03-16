@@ -56,12 +56,6 @@ func trackQuotes(equityWatchlist string) error {
 		return err
 	}
 
-	kafkaProducer, err := sarama.NewSyncProducer([]string{broker}, nil)
-	if err != nil {
-		return err
-	}
-	defer kafkaProducer.Close()
-
 	for _, result := range query.Results {
 		symbol := result.Symbol
 		lastTradePrice := result.LastTradePrice
